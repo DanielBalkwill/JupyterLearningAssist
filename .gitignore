@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local notes (not part of the app)
+PROGRESS.md

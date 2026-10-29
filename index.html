@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Notebook</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
+<style>
+:root{
+  --bg:#0f1115; --panel:#161922; --panel2:#1c2030; --border:#272c3a;
+  --text:#e6e9f0; --muted:#9aa3b2; --accent:#6ea8fe; --accent2:#8b5cf6;
+  --ok:#34d399; --err:#f87171; --warn:#fbbf24;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --panel2:#f0f2f6; --border:#d9dee8;
+  --text:#1b1f2a; --muted:#5a6272; --accent:#2563eb; --accent2:#7c3aed;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:var(--panel2);border-color:var(--border)}
+.btn.sm{padding:3px 7px;font-size:12px;border-radius:6px}
+.chip{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);white-space:nowrap}
+.chip.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,var(--border))}
+.chip.warn{color:var(--warn)}
+.chip.load{color:var(--accent)}
+
+#app{display:flex;flex-direction:column;height:100vh}
+#topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--panel);flex-wrap:wrap}
+#topbar .title{font-weight:700;letter-spacing:.2px;margin-right:6px}
+#topbar .title b{color:var(--accent)}
+#topbar .spacer{flex:1}
+#main{flex:1;display:flex;min-height:0}
+#nb-wrap{flex:1;min-width:0;overflow:auto;padding:16px;display:flex;flex-direction:column;align-items:center}
+#cells{width:100%;max-width:900px;display:flex;flex-direction:column;gap:14px}
+#nb-foot{width:100%;max-width:900px;margin-top:14px;display:flex;gap:8px}
+
+.cell{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.cell.running{border-color:var(--accent)}
+.cell.err{border-color:color-mix(in srgb,var(--err) 50%,var(--border))}
+.cell-bar{display:flex;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border);background:var(--panel2)}
+.cell-bar .idx{font-family:var(--mono);color:var(--muted);font-size:12px;min-width:34px}
+.cell-bar .grow{flex:1}
+.cell .CodeMirror{height:auto;background:transparent;font-family:var(--mono);font-size:13.5px}
+.cell .CodeMirror-scroll{min-height:38px}
+textarea.fallback{width:100%;min-height:72px;background:transparent;color:var(--text);border:0;outline:0;font-family:var(--mono);font-size:13.5px;padding:10px;resize:vertical}
+.out{padding:0 10px}
+.out:empty{padding:0}
+.out .block{margin:10px 0}
+.out pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+.out pre.stdout{color:var(--text)}
+.out pre.repr{color:var(--muted)}
+.out pre.err{color:var(--err);background:color-mix(in srgb,var(--err) 10%,transparent);padding:10px;border-radius:8px}
+.out .err-actions{margin-top:8px}
+.out img{max-width:100%;border-radius:8px;background:#fff;margin:4px 0}
+.out .htmlwrap{overflow:auto;max-height:420px;border:1px solid var(--border);border-radius:8px}
+.out table{border-collapse:collapse;font-size:12.5px}
+.out table th,.out table td{border:1px solid var(--border);padding:3px 8px;text-align:right}
+.out table thead th{background:var(--panel2)}
+
+/* markdown cells */
+.md-ta{min-height:88px}
+.md-rendered{padding:12px 14px;font-size:14px;line-height:1.6}
+.md-rendered:empty::before{content:"(empty markdown — double-click to edit)";color:var(--muted);font-style:italic}
+.md-rendered h1,.md-rendered h2,.md-rendered h3,.md-rendered h4{margin:.5em 0 .3em;line-height:1.25}
+.md-rendered h1{font-size:1.5em}.md-rendered h2{font-size:1.3em}.md-rendered h3{font-size:1.13em}
+.md-rendered p{margin:.5em 0}
+.md-rendered code{background:var(--panel2);padding:1px 5px;border-radius:5px;font-family:var(--mono);font-size:.9em}
+.md-rendered pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:auto}
+.md-rendered pre code{background:transparent;padding:0}
+.md-rendered a{color:var(--accent)}
+.md-rendered blockquote{border-left:3px solid var(--border);margin:.5em 0;padding:.1em 12px;color:var(--muted)}
+.md-rendered ul,.md-rendered ol{padding-left:1.4em;margin:.4em 0}
+.md-rendered table{border-collapse:collapse;font-size:.95em}
+.md-rendered th,.md-rendered td{border:1px solid var(--border);padding:3px 8px}
+
+/* AI panel */
+#ai{width:380px;min-width:300px;max-width:50vw;border-left:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column}
+#ai.collapsed{display:none}
+#ai-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border)}
+#ai-head .t{font-weight:600}
+#ai-status{font-size:11.5px;color:var(--muted);padding:4px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#ai-msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.msg{font-size:13px;line-height:1.5}
+.msg .who{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+.msg.user .bubble{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+.msg.ai .bubble{background:transparent}
+.msg pre.code{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;overflow:auto;font-family:var(--mono);font-size:12px;margin:6px 0}
+.msg .codeacts{display:flex;gap:6px;margin:-2px 0 8px}
+.ai-empty{color:var(--muted);font-size:12.5px;line-height:1.6}
+.ai-empty code{background:var(--panel2);padding:1px 5px;border-radius:5px;font-family:var(--mono)}
+#ai-compose{border-top:1px solid var(--border);padding:8px;display:flex;flex-direction:column;gap:6px}
+#ai-input{width:100%;min-height:58px;max-height:160px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-family:var(--sans);font-size:13px;outline:none}
+#ai-input:focus{border-color:var(--accent)}
+#ai-compose .row{display:flex;align-items:center;gap:8px}
+.toggle{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--accent)}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal-bg.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:720px;max-height:86vh;overflow:auto}
+.modal h2{margin:0;font-size:16px}
+.modal-head{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border)}
+.modal-head .spacer{flex:1}
+.modal-body{padding:16px}
+.modal-body p.hint{color:var(--muted);font-size:12.5px;margin:0 0 14px;line-height:1.6}
+.modal-body p.hint code{background:var(--panel2);padding:1px 5px;border-radius:5px;font-family:var(--mono)}
+.cred{display:grid;grid-template-columns:150px 1fr 150px 30px;gap:8px;margin-bottom:8px;align-items:center}
+.cred .wide{grid-column:1 / 4}
+.cred select,.cred input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:13px;font-family:var(--sans);width:100%;outline:none}
+.cred input:focus,.cred select:focus{border-color:var(--accent)}
+.cred .del{background:transparent;border:0;color:var(--muted);font-size:18px}
+.cred .del:hover{color:var(--err)}
+.credhdr{display:grid;grid-template-columns:150px 1fr 150px 30px;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:6px}
+.section{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+.proxyrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.proxyrow input[type=text]{flex:1;min-width:200px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:13px;outline:none}
+kbd{font-family:var(--mono);font-size:11px;background:var(--panel2);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:1px 5px}
+
+/* files panel */
+.filehdr{display:grid;grid-template-columns:1fr 78px 148px;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:6px}
+.filerow{display:grid;grid-template-columns:1fr 78px 148px;gap:8px;align-items:center;margin-bottom:8px}
+.filerow input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12.5px;font-family:var(--mono);width:100%;outline:none}
+.filerow input:focus{border-color:var(--accent)}
+.filerow .sz{font-size:12px;color:var(--muted);text-align:right}
+.filerow .acts{display:flex;gap:6px;justify-content:flex-end}
+.files-empty{color:var(--muted);font-size:12.5px;padding:8px 0}
+
+/* drop overlay */
+#drop-overlay{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:color-mix(in srgb,var(--accent) 14%,rgba(0,0,0,.55));backdrop-filter:blur(2px)}
+#drop-overlay.show{display:flex}
+#drop-overlay .box{border:3px dashed var(--accent);border-radius:18px;padding:36px 54px;background:var(--panel);text-align:center;max-width:470px}
+#drop-overlay .box .big{font-size:42px;margin-bottom:6px}
+#drop-overlay .box h3{margin:.2em 0;font-size:18px}
+#drop-overlay .box p{color:var(--muted);font-size:12.5px;margin:.4em 0 0;line-height:1.55}
+#drop-overlay .box code{background:var(--panel2);padding:1px 5px;border-radius:5px;font-family:var(--mono)}
+
+/* toast */
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:9px 14px;font-size:13px;box-shadow:0 8px 28px rgba(0,0,0,.4);max-width:72vw}
+.toast.err{border-left-color:var(--err)}
+
+@media (max-width:760px){
+  #main{flex-direction:column}
+  #ai{width:auto;max-width:none;min-width:0;border-left:0;border-top:1px solid var(--border);height:45%}
+  .cred,.credhdr{grid-template-columns:1fr 1fr;}
+  .cred .wide{grid-column:1 / 3}
+  .filehdr,.filerow{grid-template-columns:1fr 120px}
+  .filerow .sz{display:none}.filehdr div:nth-child(2){display:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="title"><b>AI</b> Notebook</span>
+    <button class="btn sm" id="btn-add">+ Code</button>
+    <button class="btn sm ghost" id="btn-add-md">+ Markdown</button>
+    <button class="btn sm primary" id="btn-runall">▶ Run all</button>
+    <button class="btn sm" id="btn-files">📁 Files</button>
+    <button class="btn sm ghost" id="btn-import">Open .ipynb</button>
+    <button class="btn sm ghost" id="btn-export">Export .ipynb</button>
+    <input type="file" id="file-import" accept=".ipynb,application/json" style="display:none" />
+    <input type="file" id="file-add" multiple style="display:none" />
+    <span class="spacer"></span>
+    <span class="chip load" id="py-status">Starting Python…</span>
+    <button class="btn sm ghost" id="btn-theme" title="Toggle theme">◐</button>
+    <button class="btn sm ghost" id="btn-ai-toggle" title="Toggle AI panel">AI ▸</button>
+    <button class="btn sm" id="btn-keys">⚙ Keys</button>
+  </div>
+  <div id="main">
+    <div id="nb-wrap">
+      <div id="cells"></div>
+      <div id="nb-foot">
+        <button class="btn ghost" id="btn-add2">+ Code cell</button>
+        <button class="btn ghost" id="btn-add2-md">+ Markdown cell</button>
+      </div>
+    </div>
+    <div id="ai">
+      <div id="ai-head">
+        <span class="t">Assistant</span>
+        <span class="spacer" style="flex:1"></span>
+        <button class="btn sm ghost" id="btn-ai-close">✕</button>
+      </div>
+      <div id="ai-status"><span class="chip" id="ai-key-chip">no keys</span></div>
+      <div id="ai-msgs"></div>
+      <div id="ai-compose">
+        <textarea id="ai-input" placeholder="Describe what you want in plain English — e.g. 'load UNSW-NB15_4(1).csv, name the columns from the features file, and show missing values per column'…"></textarea>
+        <div class="row">
+          <label class="toggle"><input type="checkbox" id="tg-insert" checked /> insert as cell</label>
+          <label class="toggle"><input type="checkbox" id="tg-autorun" /> auto-run</label>
+          <span style="flex:1"></span>
+          <button class="btn primary sm" id="ai-send">Send ⏎</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="keys-modal">
+  <div class="modal">
+    <div class="modal-head"><h2>API keys &amp; rotation</h2><span class="spacer"></span><button class="btn sm ghost" id="keys-close">✕</button></div>
+    <div class="modal-body">
+      <p class="hint">Add one row per key. The assistant tries them <b>top to bottom</b> and rotates to the next on a rate-limit (HTTP 429), parking the tired one on a short cooldown. Mix providers freely — one key each is the cleanest way to dodge free-tier limits. Keys are stored only in <b>this browser</b> (localStorage); nothing is uploaded.</p>
+      <div class="credhdr"><div>Provider</div><div>API key</div><div>Model</div><div></div></div>
+      <div id="cred-list"></div>
+      <button class="btn sm" id="add-cred">+ Add key</button>
+      <div class="section">
+        <div class="proxyrow">
+          <label class="toggle" style="font-size:13px;color:var(--text)"><input type="checkbox" id="proxy-toggle" /> Route calls through local proxy (fixes CORS)</label>
+          <input type="text" id="proxy-url" value="http://127.0.0.1:8787" />
+        </div>
+        <p class="hint" style="margin-top:8px">Some providers refuse calls straight from a browser (CORS). If a key fails with a network error, run <code>python serve.py</code> and tick this — all calls then go through the local relay and CORS no longer applies.</p>
+      </div>
+      <div class="section" style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" id="keys-cancel">Cancel</button>
+        <button class="btn primary" id="keys-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="files-modal">
+  <div class="modal">
+    <div class="modal-head"><h2>Files</h2><span class="spacer"></span><button class="btn sm ghost" id="files-close">✕</button></div>
+    <div class="modal-body">
+      <p class="hint">Drag files anywhere onto the app, or add them here. Data files are written into the notebook's working directory — read them with <code>pd.read_csv('name.csv')</code>. Edit a <b>path</b> below to place a file at a sub-path (e.g. <code>datasets/nb15/UNSW-NB15_4.csv</code>) so existing notebook code finds it. <code>.ipynb</code> files open as the notebook instead. Files live in memory for this session only — re-add them after a page reload.</p>
+      <div class="filehdr"><div>Path (editable)</div><div>Size</div><div></div></div>
+      <div id="file-list"></div>
+      <button class="btn sm" id="btn-add-files">＋ Add files</button>
+    </div>
+  </div>
+</div>
+
+<div id="drop-overlay"><div class="box">
+  <div class="big">📂</div>
+  <h3>Drop files to load them</h3>
+  <p>CSV / JSON / data files → saved to the working directory, read with <code>pd.read_csv('name')</code>.<br><code>.ipynb</code> → opened as this notebook.</p>
+</div></div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+"use strict";
+/* ---------- tiny helpers ---------- */
+const $ = (s,r=document)=>r.querySelector(s);
+const el = (tag,props={},kids=[])=>{const n=document.createElement(tag);for(const k in props){if(k==="class")n.className=props[k];else if(k==="html")n.innerHTML=props[k];else if(k==="text")n.textContent=props[k];else n.setAttribute(k,props[k]);}for(const c of [].concat(kids))if(c)n.appendChild(typeof c==="string"?document.createTextNode(c):c);return n;};
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
+function q(s){return "'"+String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+"'";}
+function basename(name){return String(name).split(/[\\/]/).pop();}
+function fmtSize(n){if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(1)+" MB";}
+
+/* ---------- toast ---------- */
+function toast(msg,isErr){const t=el("div",{class:"toast"+(isErr?" err":"")},msg);$("#toast").appendChild(t);setTimeout(()=>{t.style.transition="opacity .4s";t.style.opacity="0";setTimeout(()=>t.remove(),400);},isErr?6500:3600);}
+
+/* ---------- theme ---------- */
+(function initTheme(){const t=store.get("ainb_theme",null);if(t)document.documentElement.dataset.theme=t;})();
+$("#btn-theme").onclick=()=>{const cur=document.documentElement.dataset.theme==="light"?"light":"dark";const next=cur==="light"?"dark":"light";document.documentElement.dataset.theme=next;store.set("ainb_theme",next);cells.forEach(c=>c.cm&&c.cm.setOption("theme",cmTheme()));};
+function cmTheme(){return (document.documentElement.dataset.theme==="light")?"default":"material-darker";}
+
+/* ---------- Pyodide ---------- */
+let pyodide=null, pyReady=false, pyLoading=null;
+const PY_HARNESS = `
+import sys, io, json, base64, ast, traceback
+_ns = globals().setdefault('_USER_NS', {})
+_src = globals().get('_cell_src', '')
+_buf = io.StringIO()
+_old_out, _old_err = sys.stdout, sys.stderr
+sys.stdout = _buf; sys.stderr = _buf
+_res = {"stdout":"","error":None,"repr":None,"html":None,"images":[]}
+_plt = None
+try:
+    try:
+        import matplotlib
+        matplotlib.use("AGG")
+        import matplotlib.pyplot as _plt
+        _plt.close("all")
+    except Exception:
+        _plt = None
+    _tree = ast.parse(_src, "<cell>", "exec")
+    _last = None
+    if _tree.body and isinstance(_tree.body[-1], ast.Expr):
+        _last = _tree.body.pop()
+    exec(compile(_tree, "<cell>", "exec"), _ns)
+    if _last is not None:
+        _val = eval(compile(ast.Expression(_last.value), "<cell>", "eval"), _ns)
+        if _val is not None:
+            _h = None
+            try:
+                if hasattr(_val, "_repr_html_"):
+                    _h = _val._repr_html_()
+            except Exception:
+                _h = None
+            if _h:
+                _res["html"] = _h
+            else:
+                _res["repr"] = repr(_val)
+    if _plt is not None:
+        for _n in _plt.get_fignums():
+            _f = _plt.figure(_n)
+            _b = io.BytesIO()
+            try:
+                _f.savefig(_b, format="png", bbox_inches="tight", dpi=110)
+                _b.seek(0)
+                _res["images"].append(base64.b64encode(_b.read()).decode("ascii"))
+            except Exception:
+                pass
+        _plt.close("all")
+except SyntaxError:
+    _res["error"] = traceback.format_exc()
+except Exception:
+    _etype, _eval, _etb = sys.exc_info()
+    _t = _etb
+    while _t is not None and _t.tb_frame.f_code.co_filename != "<cell>":
+        _t = _t.tb_next
+    _res["error"] = "".join(traceback.format_exception(_etype, _eval, _t or _etb))
+finally:
+    sys.stdout, sys.stderr = _old_out, _old_err
+    _res["stdout"] = _buf.getvalue()
+json.dumps(_res)
+`;
+async function ensurePyodide(){
+  if(pyReady) return pyodide;
+  if(pyLoading) return pyLoading;
+  pyLoading=(async()=>{
+    setPyStatus("load","Starting Python…");
+    pyodide=await loadPyodide({indexURL:"https://cdn.jsdelivr.net/pyodide/v0.26.4/full/"});
+    setPyStatus("load","Loading numpy / pandas / matplotlib…");
+    try{ await pyodide.loadPackage(["numpy","pandas","matplotlib"]); }catch(e){console.warn(e);}
+    pyReady=true;
+    setPyStatus("ok","Python ready");
+    return pyodide;
+  })();
+  return pyLoading;
+}
+function setPyStatus(kind,txt){const c=$("#py-status");c.className="chip "+(kind==="ok"?"ok":kind==="warn"?"warn":"load");c.textContent=txt;}
+async function execPython(code){
+  await ensurePyodide();
+  try{ await pyodide.loadPackagesFromImports(code); }catch(e){/* unknown imports ignored */}
+  pyodide.globals.set("_cell_src", code);
+  const out=await pyodide.runPythonAsync(PY_HARNESS);
+  return JSON.parse(out);
+}
+
+/* ---------- Pyodide filesystem (uploaded files) ---------- */
+let fileRegistry=[];   // [{path,size}] — content lives in Pyodide FS, session only
+async function addFileToFS(path, arrayBuffer){
+  await ensurePyodide();
+  const bytes=new Uint8Array(arrayBuffer);
+  const dir=path.includes("/")?path.slice(0,path.lastIndexOf("/")):"";
+  if(dir){ try{ pyodide.FS.mkdirTree(dir); }catch(e){} }
+  pyodide.FS.writeFile(path, bytes);
+  const ex=fileRegistry.find(f=>f.path===path);
+  if(ex) ex.size=bytes.length; else fileRegistry.push({path,size:bytes.length});
+  updateFilesBtn(); renderFileList();
+}
+function moveFSFile(oldPath,newPath){
+  const bytes=pyodide.FS.readFile(oldPath);
+  const dir=newPath.includes("/")?newPath.slice(0,newPath.lastIndexOf("/")):"";
+  if(dir){ try{ pyodide.FS.mkdirTree(dir); }catch(e){} }
+  pyodide.FS.writeFile(newPath, bytes);
+  if(newPath!==oldPath){ try{ pyodide.FS.unlink(oldPath); }catch(e){} }
+  const f=fileRegistry.find(x=>x.path===oldPath); if(f) f.path=newPath;
+  renderFileList();
+}
+function removeFSFile(path){ try{ pyodide.FS.unlink(path); }catch(e){} fileRegistry=fileRegistry.filter(f=>f.path!==path); updateFilesBtn(); renderFileList(); }
+function updateFilesBtn(){ $("#btn-files").textContent="📁 Files"+(fileRegistry.length?" ("+fileRegistry.length+")":""); }
+
+async function handleIncomingFiles(fileList){
+  const files=[...fileList]; if(!files.length) return;
+  for(const file of files){
+    if(/\.ipynb$/i.test(file.name)){ await importIpynbFile(file); continue; }
+    if(file.size>50*1048576 && !confirm(`"${file.name}" is ${fmtSize(file.size)}. Loading large files into the in-browser Python runtime can be slow or run out of memory. Load it anyway?`)) continue;
+    try{
+      const buf=await file.arrayBuffer();
+      await addFileToFS(basename(file.name), buf);
+      toast(`Loaded ${basename(file.name)} (${fmtSize(file.size)}) → working directory`);
+    }catch(e){ toast("Couldn't load "+file.name+": "+e,true); }
+  }
+}
+function insertReadCell(path){
+  const ext=(path.split(".").pop()||"").toLowerCase();
+  let code;
+  if(ext==="csv"||ext==="txt") code=`import pandas as pd\ndf = pd.read_csv(${q(path)})\ndf.head()`;
+  else if(ext==="tsv") code=`import pandas as pd\ndf = pd.read_csv(${q(path)}, sep="\\t")\ndf.head()`;
+  else if(ext==="json") code=`import pandas as pd\ndf = pd.read_json(${q(path)})\ndf.head()`;
+  else if(ext==="xlsx"||ext==="xls") code=`import pandas as pd\ndf = pd.read_excel(${q(path)})   # needs openpyxl\ndf.head()`;
+  else if(ext==="parquet") code=`import pandas as pd\ndf = pd.read_parquet(${q(path)})\ndf.head()`;
+  else code=`with open(${q(path)}, "rb") as f:\n    data = f.read()\nprint(len(data), "bytes")\nprint(data[:500])`;
+  const c=addCell(code,"code"); persist(); c.node.scrollIntoView({behavior:"smooth",block:"center"});
+}
+function renderFileList(){
+  const list=$("#file-list"); if(!list) return; list.innerHTML="";
+  if(!fileRegistry.length){ list.appendChild(el("div",{class:"files-empty"},"No files loaded yet. Drag some onto the app, or ＋ Add files.")); return; }
+  fileRegistry.forEach(f=>{
+    const path=el("input",{type:"text",value:f.path,spellcheck:"false"});
+    const apply=()=>{const np=path.value.trim();if(np&&np!==f.path){try{moveFSFile(f.path,np);toast("Moved → "+np);}catch(e){toast("rename failed: "+e,true);path.value=f.path;}}};
+    path.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();path.blur();}});
+    path.addEventListener("blur",apply);
+    const read=el("button",{class:"btn sm"},"⤵ read cell"); read.onclick=()=>{insertReadCell(f.path);closeFiles();};
+    const del=el("button",{class:"btn sm ghost"},"✕"); del.onclick=()=>removeFSFile(f.path);
+    list.appendChild(el("div",{class:"filerow"},[path,el("div",{class:"sz"},fmtSize(f.size)),el("div",{class:"acts"},[read,del])]));
+  });
+}
+function openFiles(){ renderFileList(); $("#files-modal").classList.add("open"); }
+function closeFiles(){ $("#files-modal").classList.remove("open"); }
+
+/* ---------- drag & drop ---------- */
+let dragDepth=0;
+function dtHasFiles(e){ try{ return Array.from(e.dataTransfer.types||[]).indexOf("Files")>=0; }catch(_){ return false; } }
+window.addEventListener("dragenter",e=>{ if(dtHasFiles(e)){ e.preventDefault(); dragDepth++; $("#drop-overlay").classList.add("show"); }});
+window.addEventListener("dragover",e=>{ if(dtHasFiles(e)){ e.preventDefault(); try{e.dataTransfer.dropEffect="copy";}catch(_){} }});
+window.addEventListener("dragleave",e=>{ if(dtHasFiles(e)){ dragDepth--; if(dragDepth<=0){ dragDepth=0; $("#drop-overlay").classList.remove("show"); } }});
+window.addEventListener("drop",e=>{ e.preventDefault(); dragDepth=0; $("#drop-overlay").classList.remove("show"); if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length) handleIncomingFiles(e.dataTransfer.files); });
+
+/* ---------- cells ---------- */
+let cells=[], cellSeq=0;
+const cellsEl=$("#cells");
+
+function addCell(content="", type="code", at=null){
+  const id=++cellSeq;
+  const idx=el("span",{class:"idx"}, type==="md"?"md":"[ ]");
+  const bar=el("div",{class:"cell-bar"},[
+    idx,
+    btn("▶", type==="md"?"Render (Shift+Enter)":"Run (Shift+Enter)", ()=>runCell(id),"primary sm"),
+    el("span",{class:"grow"}),
+    btn("↑","Move up",()=>moveCell(id,-1),"ghost sm"),
+    btn("↓","Move down",()=>moveCell(id,1),"ghost sm"),
+    btn("⧉","Duplicate",()=>dupCell(id),"ghost sm"),
+    btn("🗑","Delete",()=>delCell(id),"ghost sm"),
+  ]);
+  const body=el("div",{});
+  const out=el("div",{class:"out"});
+  const node=el("div",{class:"cell"+(type==="md"?" md":"")},[bar,body,out]);
+  const cell={id,type,node,out,idxEl:idx,cm:null,ta:null,mdView:null,taWrap:null,editing:false};
+
+  if(type==="md"){
+    const view=el("div",{class:"md-rendered"});
+    view.addEventListener("dblclick",()=>editMd(cell));
+    const taWrap=el("div",{});
+    const ta=el("textarea",{class:"fallback md-ta",spellcheck:"false"}); ta.value=content;
+    ta.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.shiftKey||e.ctrlKey||e.metaKey)){e.preventDefault();renderMd(cell);} });
+    ta.addEventListener("blur",()=>{ if(cell.editing) renderMd(cell); });
+    taWrap.appendChild(ta);
+    body.appendChild(view); body.appendChild(taWrap);
+    cell.ta=ta; cell.mdView=view; cell.taWrap=taWrap;
+    if(content&&content.trim()){ renderMd(cell); } else { editMd(cell); }
+  } else if(window.CodeMirror){
+    const cm=CodeMirror(body,{value:content,mode:"python",theme:cmTheme(),lineNumbers:true,indentUnit:4,tabSize:4,lineWrapping:false,extraKeys:{
+      "Shift-Enter":()=>runCell(id),"Ctrl-Enter":()=>runCell(id),"Cmd-Enter":()=>runCell(id),
+      "Tab":(cm)=>cm.replaceSelection("    "),
+    }});
+    cell.cm=cm;
+    setTimeout(()=>cm.refresh(),0);
+  }else{
+    const ta=el("textarea",{class:"fallback",spellcheck:"false"}); ta.value=content;
+    ta.addEventListener("keydown",(e)=>{
+      if(e.key==="Enter"&&(e.shiftKey||e.ctrlKey||e.metaKey)){e.preventDefault();runCell(id);}
+      else if(e.key==="Tab"){e.preventDefault();const s=ta.selectionStart,en=ta.selectionEnd;ta.value=ta.value.slice(0,s)+"    "+ta.value.slice(en);ta.selectionStart=ta.selectionEnd=s+4;}
+    });
+    body.appendChild(ta); cell.ta=ta;
+  }
+  const pos=(at==null)?cells.length:at;
+  cells.splice(pos,0,cell);
+  cellsEl.insertBefore(node,cellsEl.children[pos]||null);
+  return cell;
+}
+function btn(txt,title,fn,cls="sm"){const b=el("button",{class:"btn "+cls,title:title},txt);b.onclick=fn;return b;}
+function getContent(c){ if(c.cm) return c.cm.getValue(); if(c.ta) return c.ta.value; return ""; }
+function setContent(c,v){ if(c.cm)c.cm.setValue(v); else if(c.ta)c.ta.value=v; if(c.type==="md") renderMd(c); }
+function cellById(id){return cells.find(c=>c.id===id);}
+
+function renderMdContent(view,src){
+  if(!src||!src.trim()){ view.innerHTML=""; return; }
+  if(window.marked&&marked.parse){ try{ view.innerHTML=marked.parse(src); return; }catch(e){} }
+  view.textContent=src;
+}
+function renderMd(c){ c.editing=false; renderMdContent(c.mdView,c.ta.value); c.taWrap.style.display="none"; c.mdView.style.display=""; persist(); }
+function editMd(c){ c.editing=true; c.mdView.style.display="none"; c.taWrap.style.display=""; setTimeout(()=>c.ta.focus(),0); }
+
+function moveCell(id,dir){const i=cells.findIndex(c=>c.id===id);const j=i+dir;if(j<0||j>=cells.length)return;const c=cells[i];cells.splice(i,1);cells.splice(j,0,c);cellsEl.innerHTML="";cells.forEach(x=>cellsEl.appendChild(x.node));if(c.cm)c.cm.refresh();persist();}
+function dupCell(id){const i=cells.findIndex(c=>c.id===id);const c=cells[i];const n=addCell(getContent(c),c.type,i+1);persist();n.node.scrollIntoView({block:"center"});}
+function delCell(id){const i=cells.findIndex(c=>c.id===id);if(i<0)return;cells[i].node.remove();cells.splice(i,1);if(!cells.length)addCell("","code");persist();}
+
+let runCounter=0;
+async function runCell(id){
+  const c=cellById(id);if(!c)return;
+  if(c.type==="md"){ renderMd(c); return; }
+  const code=getContent(c);
+  c.node.classList.remove("err");c.node.classList.add("running");
+  c.idxEl.textContent="[*]";
+  c.out.innerHTML="";
+  if(!pyReady){ setPyStatus("load","Starting Python… (first run downloads ~10MB)"); }
+  try{
+    const res=await execPython(code);
+    renderOutput(c,res);
+    c.idxEl.textContent="["+(++runCounter)+"]";
+    if(res.error)c.node.classList.add("err");
+  }catch(e){
+    renderOutput(c,{error:String(e&&e.stack||e)});
+    c.node.classList.add("err");
+  }finally{
+    c.node.classList.remove("running");
+    persist();
+  }
+}
+async function runAll(){for(const c of cells.slice()){await runCell(c.id);}}
+
+function renderOutput(c,res){
+  const o=c.out;o.innerHTML="";
+  if(res.stdout){o.appendChild(el("div",{class:"block"},[el("pre",{class:"stdout",text:res.stdout})]));}
+  if(res.html){const w=el("div",{class:"htmlwrap"});w.innerHTML=res.html;o.appendChild(el("div",{class:"block"},[w]));}
+  if(res.repr){o.appendChild(el("div",{class:"block"},[el("pre",{class:"repr",text:res.repr})]));}
+  if(res.images&&res.images.length){for(const b64 of res.images){o.appendChild(el("div",{class:"block"},[el("img",{src:"data:image/png;base64,"+b64})]));}}
+  if(res.error){
+    const pre=el("pre",{class:"err",text:res.error});
+    const fix=el("button",{class:"btn sm"},"🔧 Fix with AI");
+    fix.onclick=()=>fixCellWithAI(c.id,getContent(c),res.error);
+    o.appendChild(el("div",{class:"block"},[pre,el("div",{class:"err-actions"},[fix])]));
+  }
+}
+
+/* ---------- persistence / ipynb ---------- */
+function persist(){store.set("ainb_cells",cells.map(c=>({t:c.type,s:getContent(c)})));}
+const SEED=`import pandas as pd, numpy as np\nimport matplotlib.pyplot as plt\n\ndf = pd.DataFrame({"x": np.arange(12), "y": np.random.randn(12).cumsum()})\ndf.plot(x="x", y="y", marker="o", title="hello, pyodide")\ndf.describe()`;
+function loadCells(){
+  const saved=store.get("ainb_cells",null);
+  if(saved&&saved.length){
+    saved.forEach(item=>{ if(typeof item==="string") addCell(item,"code"); else addCell(item.s||"", item.t==="md"?"md":"code"); });
+  }else{
+    addCell("## Welcome\n\nThis is a **markdown** cell — double-click to edit. Code cells run Python in your browser.\n\nDrag a CSV onto the window (or hit **📁 Files**), then read it with `pd.read_csv('name.csv')`.","md");
+    addCell(SEED,"code");
+  }
+  persist();
+}
+function splitLines(s){ return s.length?s.split("\n").map((l,i,a)=>i<a.length-1?l+"\n":l):[]; }
+function exportIpynb(){
+  const nb={cells:cells.map(c=>{const src=splitLines(getContent(c));
+      return c.type==="md"
+        ? {cell_type:"markdown",metadata:{},source:src}
+        : {cell_type:"code",metadata:{},execution_count:null,outputs:[],source:src};}),
+    metadata:{kernelspec:{name:"python3",display_name:"Python 3"},language_info:{name:"python"}},nbformat:4,nbformat_minor:5};
+  const blob=new Blob([JSON.stringify(nb,null,1)],{type:"application/json"});
+  const a=el("a",{href:URL.createObjectURL(blob),download:"notebook.ipynb"});document.body.appendChild(a);a.click();a.remove();
+}
+function importIpynbFile(file){
+  return new Promise(res=>{
+    const r=new FileReader();
+    r.onload=()=>{ try{ loadNotebook(JSON.parse(r.result), file.name); }catch(e){ toast("Couldn't read notebook: "+e,true);} res(); };
+    r.onerror=()=>{ toast("Couldn't read "+file.name,true); res(); };
+    r.readAsText(file);
+  });
+}
+function loadNotebook(nb,name){
+  const nbCells=(nb.cells||[]).filter(c=>c.cell_type==="code"||c.cell_type==="markdown");
+  const hasWork=cells.some(c=>getContent(c).trim());
+  if(hasWork && !confirm(`Replace the current notebook with "${name||'notebook'}" (${nbCells.length} cells)?`)) return;
+  cells.slice().forEach(c=>c.node.remove()); cells=[];
+  nbCells.forEach(c=>{ const src=Array.isArray(c.source)?c.source.join(""):(c.source||""); addCell(src, c.cell_type==="markdown"?"md":"code"); });
+  if(!cells.length) addCell("","code");
+  persist();
+  toast(`Opened ${name||'notebook'} — ${nbCells.length} cells`);
+}
+
+/* ---------- providers + key rotation ---------- */
+const PROVIDERS={
+  openrouter:{label:"OpenRouter",kind:"openai",base:"https://openrouter.ai/api/v1",model:"meta-llama/llama-3.3-70b-instruct:free"},
+  groq:{label:"Groq",kind:"openai",base:"https://api.groq.com/openai/v1",model:"llama-3.3-70b-versatile"},
+  cerebras:{label:"Cerebras",kind:"openai",base:"https://api.cerebras.ai/v1",model:"llama-3.3-70b"},
+  gemini:{label:"Google Gemini",kind:"gemini",base:"https://generativelanguage.googleapis.com/v1beta",model:"gemini-2.0-flash"},
+  openai_compat:{label:"OpenAI-compatible (custom)",kind:"openai",base:"",model:""},
+};
+let creds=store.get("ainb_creds",[]);
+let settings=store.get("ainb_settings",{proxy:false,proxyUrl:"http://127.0.0.1:8787"});
+const cooldown={};
+let cursor=0;
+
+function credModel(cr){return (cr.model&&cr.model.trim())||PROVIDERS[cr.provider].model;}
+function credBase(cr){return (cr.base&&cr.base.trim())||PROVIDERS[cr.provider].base;}
+
+async function relayFetch(url,opts){
+  if(settings.proxy){
+    const r=await fetch(settings.proxyUrl.replace(/\/$/,"")+"/relay",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,method:opts.method||"POST",headers:opts.headers||{},body:opts.body})});
+    const j=await r.json();
+    return {status:j.status,text:j.body};
+  }else{
+    const r=await fetch(url,opts);
+    const text=await r.text();
+    return {status:r.status,text};
+  }
+}
+async function callProvider(cr,messages){
+  const p=PROVIDERS[cr.provider];
+  if(p.kind==="gemini"){
+    const sys=messages.filter(m=>m.role==="system").map(m=>m.content).join("\n\n");
+    const rest=messages.filter(m=>m.role!=="system");
+    const body={contents:rest.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{temperature:0.2}};
+    if(sys)body.systemInstruction={parts:[{text:sys}]};
+    const url=credBase(cr)+"/models/"+encodeURIComponent(credModel(cr))+":generateContent?key="+encodeURIComponent(cr.key);
+    const {status,text}=await relayFetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(status===429){const e=new Error("rate limited");e.rate=true;throw e;}
+    if(status<200||status>=300){const e=new Error("HTTP "+status+": "+text.slice(0,300));e.status=status;if(status===401||status===403)e.auth=true;throw e;}
+    const j=JSON.parse(text);
+    const out=(((j.candidates||[])[0]||{}).content||{}).parts||[];
+    return out.map(x=>x.text||"").join("");
+  }else{
+    const url=credBase(cr).replace(/\/$/,"")+"/chat/completions";
+    const headers={"Content-Type":"application/json","Authorization":"Bearer "+cr.key};
+    const body=JSON.stringify({model:credModel(cr),messages,temperature:0.2,stream:false});
+    const {status,text}=await relayFetch(url,{method:"POST",headers,body});
+    if(status===429){const e=new Error("rate limited");e.rate=true;throw e;}
+    if(status<200||status>=300){const e=new Error("HTTP "+status+": "+text.slice(0,300));e.status=status;if(status===401||status===403)e.auth=true;throw e;}
+    const j=JSON.parse(text);
+    return (((j.choices||[])[0]||{}).message||{}).content||"";
+  }
+}
+async function chat(messages){
+  if(!creds.length){const e=new Error("No API keys. Click ⚙ Keys to add at least one.");e.noKeys=true;throw e;}
+  const now=Date.now();let lastErr=null,tried=0;
+  for(let n=0;n<creds.length;n++){
+    const i=(cursor+n)%creds.length;
+    if(cooldown[i]&&cooldown[i]>now)continue;
+    const cr=creds[i];
+    if(!cr.key||!cr.key.trim())continue;
+    tried++;
+    setAiKeyChip("trying "+PROVIDERS[cr.provider].label+" · key #"+(i+1));
+    try{
+      const txt=await callProvider(cr,messages);
+      cursor=(i+1)%creds.length;
+      setAiKeyChip("✓ "+PROVIDERS[cr.provider].label+" · key #"+(i+1));
+      return txt;
+    }catch(e){
+      lastErr=e;
+      if(e.rate){cooldown[i]=Date.now()+60000;}
+      else if(e.auth){cooldown[i]=Date.now()+300000;}
+      else if(e instanceof TypeError){
+        lastErr=new Error("Network/CORS error reaching "+PROVIDERS[cr.provider].label+". If this is CORS, run serve.py and enable the proxy in ⚙ Keys.");
+      }
+      continue;
+    }
+  }
+  if(tried===0){const e=new Error("All keys are on cooldown — wait a moment and retry.");throw e;}
+  throw lastErr||new Error("All keys failed.");
+}
+
+/* ---------- AI panel ---------- */
+const aiMsgs=$("#ai-msgs");
+let history=[];
+const SYS_CODE="You are a coding assistant embedded in an in-browser Jupyter-style notebook that runs Python through Pyodide (WebAssembly). Available libraries: numpy, pandas, matplotlib (import matplotlib.pyplot as plt), scikit-learn, scipy, networkx. Do NOT use packages unavailable in Pyodide (no polars, torch, tensorflow). The notebook shares ONE namespace across cells, so variables persist between cells. Plots are captured automatically — just build them with matplotlib, no plt.show() needed. Files the user drags in are saved in the notebook's working directory — read them directly by filename, e.g. pd.read_csv('data.csv'); a CSV may need encoding= (try 'cp1252' if utf-8 fails) or header=None, so inspect first if unsure. You can also generate data or load from a URL. When writing code, reply with ONE python code block and minimal prose.";
+
+function renderAiEmpty(){
+  aiMsgs.innerHTML="";
+  aiMsgs.appendChild(el("div",{class:"ai-empty",html:
+    "Ask for code in plain English and I'll drop it into a cell.<br><br>"+
+    "Try:<br>• <code>load UNSW-NB15_4(1).csv with no header and show the shape</code><br>"+
+    "• <code>show missing values per column as a bar chart</code><br>• <code>forward-fill the state columns and flag what was missing</code><br><br>"+
+    "Drag a CSV onto the window (or <b>📁 Files</b>) to load data, then read it with <code>pd.read_csv('name')</code>. When a cell errors, hit <b>🔧 Fix with AI</b>.<br><br>"+
+    "No keys yet? Click <b>⚙ Keys</b> (top-right) and paste one or more free API keys."}));
+}
+function pushMsg(role,contentNode){
+  if(aiMsgs.querySelector(".ai-empty"))aiMsgs.innerHTML="";
+  const m=el("div",{class:"msg "+(role==="user"?"user":"ai")},[el("div",{class:"who"},role==="user"?"you":"assistant"),contentNode]);
+  aiMsgs.appendChild(m);aiMsgs.scrollTop=aiMsgs.scrollHeight;return m;
+}
+function parseBlocks(text){
+  const parts=[];const re=/```[a-zA-Z0-9_+-]*\n?([\s\S]*?)```/g;let last=0,m;
+  while((m=re.exec(text))){if(m.index>last)parts.push({type:"text",content:text.slice(last,m.index)});parts.push({type:"code",content:m[1].replace(/\n$/,"")});last=re.lastIndex;}
+  if(last<text.length)parts.push({type:"text",content:text.slice(last)});
+  return parts;
+}
+function firstCode(text){const b=parseBlocks(text).find(p=>p.type==="code");return b?b.content:null;}
+function renderAiText(text){
+  const wrap=el("div",{class:"bubble"});
+  for(const p of parseBlocks(text)){
+    if(p.type==="text"){if(p.content.trim())wrap.appendChild(el("div",{text:p.content.trim()}));}
+    else{
+      wrap.appendChild(el("pre",{class:"code",text:p.content}));
+      const acts=el("div",{class:"codeacts"});
+      const ins=el("button",{class:"btn sm"},"⤵ Insert as cell");ins.onclick=()=>{const c=addCell(p.content,"code");persist();c.node.scrollIntoView({behavior:"smooth",block:"center"});};
+      const insrun=el("button",{class:"btn sm primary"},"▶ Insert & run");insrun.onclick=async()=>{const c=addCell(p.content,"code");persist();c.node.scrollIntoView({behavior:"smooth",block:"center"});await runCell(c.id);};
+      acts.appendChild(ins);acts.appendChild(insrun);wrap.appendChild(acts);
+    }
+  }
+  return wrap;
+}
+async function ask(userText,{system=SYS_CODE,insert=null,autorun=null}={}){
+  insert=insert==null?$("#tg-insert").checked:insert;
+  autorun=autorun==null?$("#tg-autorun").checked:autorun;
+  pushMsg("user",el("div",{class:"bubble",text:userText}));
+  const thinking=pushMsg("ai",el("div",{class:"bubble",text:"…thinking"}));
+  const fileNote=fileRegistry.length?("\n\n[Files available in the working directory: "+fileRegistry.map(f=>f.path).join(", ")+"]"):"";
+  const messages=[{role:"system",content:system}].concat(history.slice(-6)).concat([{role:"user",content:userText+fileNote}]);
+  try{
+    const reply=await chat(messages);
+    thinking.remove();
+    pushMsg("ai",renderAiText(reply));
+    history.push({role:"user",content:userText},{role:"assistant",content:reply});
+    const code=firstCode(reply);
+    if(code&&insert){const c=addCell(code,"code");persist();c.node.scrollIntoView({behavior:"smooth",block:"center"});if(autorun)await runCell(c.id);}
+  }catch(e){
+    thinking.remove();
+    pushMsg("ai",el("div",{class:"bubble"},[el("pre",{class:"err",text:(e.message||String(e))})]));
+    setAiKeyChip("error");
+  }
+}
+function fixCellWithAI(id,code,tb){
+  openAi();
+  ask("Fix the error in this notebook cell. Return the corrected full cell.\n\nCODE:\n```python\n"+code+"\n```\n\nTRACEBACK:\n```\n"+tb+"\n```",{insert:true,autorun:false});
+}
+function setAiKeyChip(t){const c=$("#ai-key-chip");c.textContent=t;c.className="chip"+(/^✓/.test(t)?" ok":/error|fail/i.test(t)?" warn":"");}
+function refreshKeyChip(){setAiKeyChip(creds.length?(creds.length+" key"+(creds.length>1?"s":"")+" loaded"):"no keys — click ⚙");}
+
+/* ---------- keys modal ---------- */
+const credList=$("#cred-list");
+function credRow(cr={provider:"openrouter",key:"",model:"",base:""}){
+  const sel=el("select",{});for(const k in PROVIDERS)sel.appendChild(el("option",{value:k},PROVIDERS[k].label));sel.value=cr.provider;
+  const key=el("input",{type:"password",placeholder:"paste API key",value:cr.key||""});
+  const model=el("input",{type:"text",placeholder:PROVIDERS[cr.provider].model||"model id",value:cr.model||""});
+  const base=el("input",{class:"wide",type:"text",placeholder:"base URL (for OpenAI-compatible)",value:cr.base||""});
+  const del=el("button",{class:"del",title:"remove"},"×");
+  const row=el("div",{class:"cred"},[sel,key,model,del]);
+  function syncBase(){model.placeholder=PROVIDERS[sel.value].model||"model id";if(sel.value==="openai_compat"){if(!row.contains(base))row.insertBefore(base,del);}else{if(row.contains(base))row.removeChild(base);}}
+  sel.onchange=syncBase;syncBase();
+  del.onclick=()=>row.remove();
+  row._get=()=>({provider:sel.value,key:key.value.trim(),model:model.value.trim(),base:base.value.trim()});
+  return row;
+}
+function openKeys(){
+  credList.innerHTML="";
+  (creds.length?creds:[{provider:"openrouter",key:"",model:"",base:""}]).forEach(c=>credList.appendChild(credRow(c)));
+  $("#proxy-toggle").checked=!!settings.proxy;$("#proxy-url").value=settings.proxyUrl||"http://127.0.0.1:8787";
+  $("#keys-modal").classList.add("open");
+}
+function closeKeys(){$("#keys-modal").classList.remove("open");}
+$("#add-cred").onclick=()=>credList.appendChild(credRow());
+$("#keys-save").onclick=()=>{
+  creds=[...credList.querySelectorAll(".cred")].map(r=>r._get()).filter(c=>c.key);
+  settings={proxy:$("#proxy-toggle").checked,proxyUrl:$("#proxy-url").value.trim()||"http://127.0.0.1:8787"};
+  store.set("ainb_creds",creds);store.set("ainb_settings",settings);
+  for(const k in cooldown)delete cooldown[k];cursor=0;
+  refreshKeyChip();closeKeys();
+};
+$("#keys-cancel").onclick=closeKeys;$("#keys-close").onclick=closeKeys;
+$("#keys-modal").onclick=(e)=>{if(e.target.id==="keys-modal")closeKeys();};
+$("#files-close").onclick=closeFiles;
+$("#files-modal").onclick=(e)=>{if(e.target.id==="files-modal")closeFiles();};
+
+/* ---------- AI panel show/hide ---------- */
+function openAi(){$("#ai").classList.remove("collapsed");$("#btn-ai-toggle").textContent="AI ◂";cells.forEach(c=>c.cm&&c.cm.refresh());}
+function closeAi(){$("#ai").classList.add("collapsed");$("#btn-ai-toggle").textContent="AI ▸";}
+$("#btn-ai-toggle").onclick=()=>$("#ai").classList.contains("collapsed")?openAi():closeAi();
+$("#btn-ai-close").onclick=closeAi;
+
+/* ---------- wire up ---------- */
+$("#btn-add").onclick=()=>{const c=addCell("","code");persist();c.node.scrollIntoView({block:"center"});};
+$("#btn-add-md").onclick=()=>{const c=addCell("","md");persist();c.node.scrollIntoView({block:"center"});};
+$("#btn-add2").onclick=()=>{const c=addCell("","code");persist();c.node.scrollIntoView({block:"center"});};
+$("#btn-add2-md").onclick=()=>{const c=addCell("","md");persist();c.node.scrollIntoView({block:"center"});};
+$("#btn-runall").onclick=runAll;
+$("#btn-export").onclick=exportIpynb;
+$("#btn-import").onclick=()=>$("#file-import").click();
+$("#file-import").onchange=(e)=>{if(e.target.files[0])importIpynbFile(e.target.files[0]);e.target.value="";};
+$("#btn-files").onclick=openFiles;
+$("#btn-add-files").onclick=()=>$("#file-add").click();
+$("#file-add").onchange=(e)=>{if(e.target.files&&e.target.files.length)handleIncomingFiles(e.target.files);e.target.value="";};
+$("#btn-keys").onclick=openKeys;
+$("#ai-send").onclick=()=>{const t=$("#ai-input").value.trim();if(!t)return;$("#ai-input").value="";ask(t);};
+$("#ai-input").addEventListener("keydown",(e)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("#ai-send").click();}});
+
+/* ---------- boot ---------- */
+renderAiEmpty();
+loadCells();
+refreshKeyChip();
+updateFilesBtn();
+ensurePyodide();   // warm up in background
+</script>
+</body>
+</html>
